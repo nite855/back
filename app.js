@@ -1,60 +1,90 @@
 const express = require('express');
 const app = express();
-require('dotenv').config();
-const corsMiddleware = require('.CorsConfig');
-const PORT = process.env.PORT || 3000;
+const db = require('./DataBase/initdb');
 
-//swagger연결
-const { swaggerUi, specs } = require('.Swagger.js');
+//swagger요청 확인용
+// app.use((req, res, next) => {
+//   console.log("➡️ 요청 들어옴:", req.method, req.url);
+//   next();
+// });
+
+const corsMiddleware = require('./SettingFile/CorsConfig');
+const { PORT } = require('./SettingFile/config');
+
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const CreateDB = require("./DataBase/createDB")
+
+
+
+// Swagger 연결
+const { swaggerUi, specs } = require('./SettingFile/Swagger');
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(specs));
 
-//cors설정, 다른 도메인에서 API 요청을 보낼 때, 백엔드가 그 요청을 허용해주는 역할
+// CORS 설정
 app.use(corsMiddleware);
-app.use(express.json()); // JSON 파싱 미들웨어도 추가 추천
+app.use(express.json());
 
 console.log('   corsMiddleware 타입:', typeof corsMiddleware);
 
-// 로그인 라우터 불러오기
-const loginRouter = require('./DBLogic/adminUser/Login');
-console.log('  loginRouter 타입:', typeof loginRouter);
-
-// 서버 IP 주소 출력
-const os = require('os');
-const networkInterfaces = os.networkInterfaces();
-
-for (const name of Object.keys(networkInterfaces)) {
-  for (const net of networkInterfaces[name]) {
-    if (net.family === 'IPv4' && !net.internal) {
-      console.log(`✅ 서버 IP 주소: http://${net.address}:${PORT}`);
-    }
-  }
-}
-
-//라우터 연결, DBLogic 돌면서 모든 api호출, 
-const fs = require('fs');
-const path = require('path');
-
+//라우터 자동 로딩 함수
 function loadRoutesFromDir(dir) {
   fs.readdirSync(dir).forEach(file => {
-    const fullPath = path.join(dir, file);  //각 폴더의 하위 폴더를 찾아서 경로반환
+    const fullPath = path.join(dir, file);
     if (fs.statSync(fullPath).isDirectory()) {
-      // 폴더면 재귀적으로 다시 탐색
       loadRoutesFromDir(fullPath);
     } else if (file.endsWith('.js')) {
-      //.js파일이면 라우터 등록
       const route = require(fullPath);
       app.use('/', route);
       console.log(`✅ 라우터 등록: ${fullPath}`);
     }
+    
   });
+ 
 }
 
-// DBLogic 폴더부터 시작
-loadRoutesFromDir(path.join(__dirname, 'DBLogic'));
 
+//서버 IP 출력 함수
+function printServerIPs() {
+  const networkInterfaces = os.networkInterfaces();
+  for (const name of Object.keys(networkInterfaces)) {
+    for (const net of networkInterfaces[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        console.log(`✅ 서버 IP 주소: http://${net.address}:${PORT}`);
+      }
+    }
+  }
+}
 
+// 초기화 함수
+async function initApp() {
+  console.log('서버 초기화 시작');
 
-//서버 실행
-app.listen(PORT, () => {
-  console.log(`✅ 서버 실행 중: http://localhost:${PORT}`);
-});
+  // 1. DB 초기화가 필요하다면 여기서 await
+  await CreateDB();
+  
+  
+
+  // 2. 라우터 등록
+  loadRoutesFromDir(path.join(__dirname, 'DBLogic'));
+  
+
+  // 3. 서버 IP 출력
+  printServerIPs();
+
+  console.log('✅ 초기화 완료');
+}
+
+// 초기화 후 서버 시작
+initApp()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`✅ 서버 실행 중: http://localhost:${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ 서버 초기화 실패:', err);
+    
+  });

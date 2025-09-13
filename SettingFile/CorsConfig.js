@@ -4,7 +4,7 @@ const cors = require('cors');
 
 const corsOptions = {
   origin: ['http://localhost:3000', 'https://your-frontend.com'], //프론트 형성 후 주소 정할것
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 };
 
